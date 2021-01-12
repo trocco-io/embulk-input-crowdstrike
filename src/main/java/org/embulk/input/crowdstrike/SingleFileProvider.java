@@ -3,7 +3,6 @@ package org.embulk.input.crowdstrike;
 import com.amazonaws.services.sqs.model.Message;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.embulk.config.ConfigException;
 import org.embulk.exec.NoSampleException;
 import org.embulk.spi.util.InputStreamFileInput;
 import org.slf4j.Logger;
@@ -24,25 +23,25 @@ public class SingleFileProvider implements InputStreamFileInput.Provider {
     private List<Message> messages;
 
     public SingleFileProvider(PluginTask task, List<Message> messages, SqsClient sqsClient) {
-        logger.info(String.format("[message size] %d", messages.size()));
-
-        if(messages.size() == 0){
-            throw new NoSampleException("message is empty");
-        }
-
         List<String> paths = new ArrayList<>();
-        for (Message message : messages) {
-            try {
-                String body = message.getBody();
-                logger.info(String.format("[message] %s", body));
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode node = mapper.readTree(body);
-                JsonNode files = node.get("files");
-                for (JsonNode fileInfo : files) {
-                    paths.add(fileInfo.get("path").asText());
+        if(task.getPreviewMode()) {
+            logger.info(String.format("[preview] message path%s", task.getPreviewS3Path()));
+            paths.add(task.getPreviewS3Path());
+        } else {
+            logger.info(String.format("[message size] %d", messages.size()));
+
+            for (Message message : messages) {
+                try {
+                    String body = message.getBody();
+                    ObjectMapper mapper = new ObjectMapper();
+                    JsonNode node = mapper.readTree(body);
+                    JsonNode files = node.get("files");
+                    for (JsonNode fileInfo : files) {
+                        paths.add(fileInfo.get("path").asText());
+                    }
+                } catch (IOException e) {
+                    logger.error(e.getMessage(), e);
                 }
-            } catch (IOException e) {
-                logger.error(e.getMessage(), e);
             }
         }
         this.iterator = paths.iterator();
@@ -56,7 +55,9 @@ public class SingleFileProvider implements InputStreamFileInput.Provider {
         if (!iterator.hasNext()) {
             return null;
         }
-        return s3Client.findS3Object(iterator.next());
+        String path = iterator.next();
+        logger.info(String.format("[message] receive data path %s", path));
+        return s3Client.findS3Object(path);
     }
 
     @Override

@@ -11,6 +11,7 @@ import org.embulk.exec.ExecutionInterruptedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class SqsClient {
@@ -18,6 +19,7 @@ public class SqsClient {
 
     private String queueUrl;
     private AmazonSQS client;
+    private boolean isPreview;
 
     public SqsClient(PluginTask task) {
         try {
@@ -29,6 +31,7 @@ public class SqsClient {
                     .withRegion(Regions.fromName(task.getRegion()))
                     .withCredentials(new AWSStaticCredentialsProvider(credentials))
                     .build();
+            this.isPreview = task.getPreviewMode();
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
             throw new ConfigException(e);
@@ -37,8 +40,12 @@ public class SqsClient {
 
     public List<Message> getMessages() {
         try {
+            if (isPreview) {
+                logger.info("[preview] not receive SQS messages.");
+                return new ArrayList<>();
+            }
             logger.info("receive SQS messages");
-            return client.receiveMessage(queueUrl).getMessages();
+            return getMessages(new ArrayList<>());
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
             throw new ExecutionInterruptedException(e);
@@ -46,10 +53,20 @@ public class SqsClient {
 
     }
 
+    private List<Message> getMessages(List<Message> allMessages) {
+        List<Message> messages = client.receiveMessage(queueUrl).getMessages();
+        logger.info(String.format("receive SQS messages size %d", messages.size()));
+        if (messages.size() == 0) {
+            return allMessages;
+        } else {
+            allMessages.addAll(messages);
+            return getMessages(allMessages);
+        }
+    }
+
     public void deleteMessages(List<Message> messages) {
         try {
             for (Message message : messages) {
-                logger.info(String.format("[delete SQS message] %s", message.getBody()));
                 client.deleteMessage(queueUrl, message.getReceiptHandle());
             }
         } catch (Exception e) {
