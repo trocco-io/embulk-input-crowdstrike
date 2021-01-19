@@ -20,6 +20,7 @@ public class SqsClient {
     private String queueUrl;
     private AmazonSQS client;
     private boolean isPreview;
+    private int messageSize;
 
     public SqsClient(PluginTask task) {
         try {
@@ -32,6 +33,7 @@ public class SqsClient {
                     .withCredentials(new AWSStaticCredentialsProvider(credentials))
                     .build();
             this.isPreview = task.getPreviewMode();
+            this.messageSize = task.getMessageSize();
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
             throw new ConfigException(e);
@@ -54,6 +56,9 @@ public class SqsClient {
     }
 
     private List<Message> getMessages(List<Message> allMessages) {
+        if (allMessages.size() >= messageSize ) {
+            return allMessages;
+        }
         List<Message> messages = client.receiveMessage(queueUrl).getMessages();
         logger.info(String.format("receive SQS messages size %d", messages.size()));
         if (messages.size() == 0) {
