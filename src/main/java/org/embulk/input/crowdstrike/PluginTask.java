@@ -30,6 +30,10 @@ public interface PluginTask extends Task {
     @ConfigDefault("\"sample\"")
     String getPreviewS3Path();
 
+    @Config("message_size")
+    @ConfigDefault("100")
+    Integer getMessageSize();
+
     @ConfigInject
     BufferAllocator getBufferAllocator();
 }
