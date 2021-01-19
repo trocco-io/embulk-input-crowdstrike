@@ -56,9 +56,12 @@ public class SqsClient {
     }
 
     private List<Message> getMessages(List<Message> allMessages) {
+        if (allMessages.size() >= messageSize ) {
+            return allMessages;
+        }
         List<Message> messages = client.receiveMessage(queueUrl).getMessages();
         logger.info(String.format("receive SQS messages size %d", messages.size()));
-        if (messages.size() == 0 || allMessages.size() >= messageSize) {
+        if (messages.size() == 0) {
             return allMessages;
         } else {
             allMessages.addAll(messages);
